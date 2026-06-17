@@ -12,7 +12,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y unzip
+          sudo apt-get install -y unzip p7zip-full
           python3 -m pip install --upgrade pip
           pip install git+https://github.com/adamwasowicz9-yansk/samloader.git
 
@@ -23,39 +23,33 @@ jobs:
           samloader \
             -m SM-S901E \
             -r GLB \
-            -i 352497337708509 \
             download \
+            -i 352497337708509 \
             -v "S901EXXSDGZB6/S901EOXMDGZB6/S901EXXSDGZB6/S901EXXSDGZB6" \
             -O download
 
-      - name: Find encrypted firmware
+      - name: Find firmware zip
         id: firmware
         run: |
-          FILE=$(find download -type f -name "*.enc4" | head -n1)
+          FILE=$(find download -type f -name "*.zip" | head -n1)
 
           if [ -z "$FILE" ]; then
-            echo "Firmware .enc4 not found"
+            echo "Firmware ZIP not found"
             find download -type f
             exit 1
           fi
 
+          echo "Found: $FILE"
           echo "file=$FILE" >> "$GITHUB_OUTPUT"
-
-      - name: Decrypt firmware
-        run: |
-          samloader \
-            -m SM-S901E \
-            -r GLB \
-            decrypt \
-            -v "S901EXXSDGZB6/S901EOXMDGZB6/S901EXXSDGZB6/S901EXXSDGZB6" \
-            -V 4 \
-            -i "${{ steps.firmware.outputs.file }}" \
-            -o firmware.zip
 
       - name: Extract firmware
         run: |
           mkdir -p firmware
-          unzip -o firmware.zip -d firmware
+          unzip -o "${{ steps.firmware.outputs.file }}" -d firmware
+
+      - name: Show extracted files
+        run: |
+          find firmware -type f | sort
 
       - name: Find AP file
         run: |
@@ -69,6 +63,9 @@ jobs:
 
           mkdir -p artifact
           cp "$AP_FILE" artifact/AP.tar.md5
+
+          echo "Selected AP:"
+          ls -lh artifact/AP.tar.md5
 
       - name: Upload AP artifact
         uses: actions/upload-artifact@v4
