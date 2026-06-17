@@ -1,4 +1,4 @@
-name: Inspect AP Firmware
+name: Inspect AP firmware
 
 on:
   workflow_dispatch:
@@ -11,58 +11,74 @@ jobs:
       - name: Download AP artifact
         uses: actions/download-artifact@v4
         with:
+          github-token: ${{ secrets.GH_PAT }}
           repository: adamwasowicz9-yansk/urban-winner
           run-id: 27711530815
           name: AP_S901EXXSDGZB6
           path: ap
 
-      - name: Find files
+      - name: Show downloaded files
         run: |
           echo "===== DOWNLOADED ====="
           find ap | sort
 
-      - name: Extract ZIP
+      - name: Locate archive
+        run: |
+          FILE=$(find ap -type f | head -1)
+
+          echo "FILE=$FILE" >> $GITHUB_ENV
+
+          echo "===== FILE ====="
+          ls -lh "$FILE"
+
+          echo
+          echo "===== TYPE ====="
+          file "$FILE"
+
+      - name: Extract ZIP if needed
         run: |
           mkdir extracted
 
-          ZIP=$(find ap -name "*.zip" | head -1)
+          if file "$FILE" | grep -qi zip; then
+            unzip -q "$FILE" -d extracted
+          else
+            cp "$FILE" extracted/
+          fi
 
-          echo "ZIP=$ZIP"
-
-          unzip -q "$ZIP" -d extracted
-
-          echo
-          echo "===== AFTER ZIP ====="
+          echo "===== EXTRACTED ====="
           find extracted | sort
 
-      - name: Inspect TAR.MD5
+      - name: Find TAR.MD5
         run: |
-          TAR=$(find extracted -name "*.tar.md5" | head -1)
+          TAR=$(find extracted -iname "*.tar.md5" | head -1)
 
-          echo "TAR=$TAR"
+          echo "TAR=$TAR" >> $GITHUB_ENV
+
+          echo "===== TAR.MD5 ====="
+          ls -lh "$TAR"
+
+      - name: List TAR contents
+        run: |
+          tar -tvf "$TAR" > tar_contents.txt
+
+          echo "===== FIRST 300 ====="
+          head -300 tar_contents.txt
 
           echo
-          echo "===== TAR CONTENTS ====="
-          tar -tvf "$TAR" | tee tar_contents.txt
+          echo "===== LAST 300 ====="
+          tail -300 tar_contents.txt
 
-      - name: Extract only image names
+      - name: Categorize images
         run: |
-          TAR=$(find extracted -name "*.tar.md5" | head -1)
+          tar -tvf "$TAR" | grep -Ei '\.(img|lz4|bin|mbn|elf)$' > partitions.txt || true
 
-          mkdir images
+          echo "===== PARTITIONS ====="
+          cat partitions.txt
 
-          tar -tvf "$TAR" \
-            | awk '{print $NF}' \
-            | tee image_names.txt
-
-          echo
-          echo "===== IMAGE FILES ====="
-          cat image_names.txt
-
-      - name: Upload report
+      - name: Upload reports
         uses: actions/upload-artifact@v4
         with:
           name: ap-inspection
           path: |
             tar_contents.txt
-            image_names.txt
+            partitions.txt
