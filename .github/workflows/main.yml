@@ -18,11 +18,12 @@ jobs:
 
       - name: Download firmware
         run: |
-          mkdir download
+          mkdir -p download
 
           samloader \
             -m SM-S901E \
             -r GLB \
+            -i 352497337708509 \
             download \
             -v "S901EXXSDGZB6/S901EOXMDGZB6/S901EXXSDGZB6/S901EXXSDGZB6" \
             -O download
@@ -34,10 +35,11 @@ jobs:
 
           if [ -z "$FILE" ]; then
             echo "Firmware .enc4 not found"
+            find download -type f
             exit 1
           fi
 
-          echo "file=$FILE" >> $GITHUB_OUTPUT
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
 
       - name: Decrypt firmware
         run: |
@@ -52,11 +54,10 @@ jobs:
 
       - name: Extract firmware
         run: |
-          mkdir firmware
+          mkdir -p firmware
           unzip -o firmware.zip -d firmware
 
       - name: Find AP file
-        id: ap
         run: |
           AP_FILE=$(find firmware -type f -name "AP_*.tar.md5" | head -n1)
 
@@ -66,7 +67,7 @@ jobs:
             exit 1
           fi
 
-          mkdir artifact
+          mkdir -p artifact
           cp "$AP_FILE" artifact/AP.tar.md5
 
       - name: Upload AP artifact
