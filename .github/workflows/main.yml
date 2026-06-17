@@ -9,6 +9,14 @@ jobs:
     timeout-minutes: 360
 
     steps:
+      - name: Free Disk Space (Ubuntu)
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf "/usr/local/share/boost"
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -23,10 +31,10 @@ jobs:
           samloader \
             -m SM-S901E \
             -r GLB \
-            download \
             -i 352497337708509 \
+            download \
             -v "S901EXXSDGZB6/S901EOXMDGZB6/S901EXXSDGZB6/S901EXXSDGZB6" \
-            -O download
+            -o download
 
       - name: Find firmware zip
         id: firmware
