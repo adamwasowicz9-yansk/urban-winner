@@ -24,30 +24,16 @@ jobs:
           python3 -m pip install --upgrade pip
           pip install git+https://github.com/adamwasowicz9-yansk/samloader.git
 
-      - name: Download and Decrypt firmware
+      - name: Download firmware
         run: |
-          # 1. Pobranie zaszyfrowanego pliku enc4
+          # Ten fork samloader automatycznie deszyfruje plik po pobraniu!
           samloader \
             -m SM-S901E \
             -r GLB \
             -i 352497337708509 \
             download \
             -v "S901EXXSDGZB6/S901EOXMDGZB6/S901EXXSDGZB6/S901EXXSDGZB6" \
-            -o firmware.zip.enc4
-
-          # 2. Odszyfrowanie pliku do poprawnego ZIP
-          samloader \
-            -m SM-S901E \
-            -r GLB \
-            -i 352497337708509 \
-            decrypt \
-            -v "S901EXXSDGZB6/S901EOXMDGZB6/S901EXXSDGZB6/S901EXXSDGZB6" \
-            -V 4 \
-            -i firmware.zip.enc4 \
             -o firmware.zip
-
-          # 3. Czyszczenie zaszyfrowanego pliku tymczasowego (oszczędność miejsca)
-          rm -f firmware.zip.enc4
 
       - name: Find firmware zip
         id: firmware
