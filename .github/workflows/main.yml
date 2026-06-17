@@ -26,24 +26,21 @@ jobs:
 
       - name: Download firmware
         run: |
-          mkdir -p download
-
           samloader \
             -m SM-S901E \
             -r GLB \
             -i 352497337708509 \
             download \
-            -v "S901EXXSDGZB6/S901EOXMDGZB6/S901EXXSDGZB6/S901EXXSDGZB6" \
-            -o download
+            -v "S901EXXSDGZB6/S901EOXMDGZB6/S901EXXSDGZB6/S901EXXSDGZB6"
 
       - name: Find firmware zip
         id: firmware
         run: |
-          FILE=$(find download -type f -name "*.zip" | head -n1)
+          FILE=$(find . -maxdepth 1 -type f -name "*.zip" | head -n1)
 
           if [ -z "$FILE" ]; then
             echo "Firmware ZIP not found"
-            find download -type f
+            find . -maxdepth 1 -type f
             exit 1
           fi
 
