@@ -1,4 +1,4 @@
-name: inspect
+name: Inspect AP firmware
 
 on:
   workflow_dispatch:
@@ -8,58 +8,77 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download artifact ZIP via GitHub API
-        env:
-          GH_PAT: ${{ secrets.GH_PAT }}
+      - name: Download AP artifact
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GH_PAT }}
+          repository: adamwasowicz9-yansk/urban-winner
+          run-id: 27711530815
+          name: AP_S901EXXSDGZB6
+          path: ap
+
+      - name: Show downloaded files
         run: |
-          set -eux
+          echo "===== DOWNLOADED ====="
+          find ap | sort
 
-          ARTIFACT_ID=7705052240
-
-          curl -L \
-            -H "Authorization: Bearer ${GH_PAT}" \
-            -H "Accept: application/vnd.github+json" \
-            -o artifact.zip \
-            "https://api.github.com/repos/adamwasowicz9-yansk/urban-winner/actions/artifacts/${ARTIFACT_ID}/zip"
-
-          ls -lh artifact.zip
-
-      - name: Extract artifact
+      - name: Locate archive
         run: |
-          unzip artifact.zip -d artifact
-          find artifact -type f
+          FILE=$(find ap -type f | head -1)
 
-      - name: Extract tar.md5
+          echo "FILE=$FILE" >> $GITHUB_ENV
+
+          echo "===== FILE ====="
+          ls -lh "$FILE"
+
+          echo
+          echo "===== TYPE ====="
+          file "$FILE"
+
+      - name: Extract ZIP if needed
         run: |
-          FILE=$(find artifact -name "*.tar.md5" | head -n1)
+          mkdir extracted
 
-          echo "Found: $FILE"
+          if file "$FILE" | grep -qi zip; then
+            unzip -q "$FILE" -d extracted
+          else
+            cp "$FILE" extracted/
+          fi
 
-          cp "$FILE" firmware.tar
+          echo "===== EXTRACTED ====="
+          find extracted | sort
 
-          tar -tf firmware.tar | head -100
-
-          mkdir fw
-          tar -xf firmware.tar -C fw
-
-          echo "=== extracted ==="
-          find fw -maxdepth 2 -type f
-
-      - name: Identify partitions
+      - name: Find TAR.MD5
         run: |
-          sudo apt-get update
-          sudo apt-get install -y simg2img lz4
+          TAR=$(find extracted -iname "*.tar.md5" | head -1)
 
-          find fw -type f | while read f; do
-            echo
-            echo "==== $f ===="
-            file "$f"
-          done
+          echo "TAR=$TAR" >> $GITHUB_ENV
 
-      - name: Upload report
+          echo "===== TAR.MD5 ====="
+          ls -lh "$TAR"
+
+      - name: List TAR contents
+        run: |
+          tar -tvf "$TAR" > tar_contents.txt
+
+          echo "===== FIRST 300 ====="
+          head -300 tar_contents.txt
+
+          echo
+          echo "===== LAST 300 ====="
+          tail -300 tar_contents.txt
+
+      - name: Categorize images
+        run: |
+          tar -tvf "$TAR" | grep -Ei '\.(img|lz4|bin|mbn|elf)$' > partitions.txt || true
+
+          echo "===== PARTITIONS ====="
+          cat partitions.txt
+
+      - name: Upload reports
         uses: actions/upload-artifact@v4
         with:
-          name: inspection-results
+          name: ap-inspection
           path: |
-            artifact
-            fw
+            tar_contents.txt
+            partitions.txt
