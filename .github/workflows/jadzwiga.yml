@@ -1,0 +1,68 @@
+name: Inspect AP Firmware
+
+on:
+  workflow_dispatch:
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download AP artifact
+        uses: actions/download-artifact@v4
+        with:
+          repository: adamwasowicz9-yansk/urban-winner
+          run-id: 27711530815
+          name: AP_S901EXXSDGZB6
+          path: ap
+
+      - name: Find files
+        run: |
+          echo "===== DOWNLOADED ====="
+          find ap | sort
+
+      - name: Extract ZIP
+        run: |
+          mkdir extracted
+
+          ZIP=$(find ap -name "*.zip" | head -1)
+
+          echo "ZIP=$ZIP"
+
+          unzip -q "$ZIP" -d extracted
+
+          echo
+          echo "===== AFTER ZIP ====="
+          find extracted | sort
+
+      - name: Inspect TAR.MD5
+        run: |
+          TAR=$(find extracted -name "*.tar.md5" | head -1)
+
+          echo "TAR=$TAR"
+
+          echo
+          echo "===== TAR CONTENTS ====="
+          tar -tvf "$TAR" | tee tar_contents.txt
+
+      - name: Extract only image names
+        run: |
+          TAR=$(find extracted -name "*.tar.md5" | head -1)
+
+          mkdir images
+
+          tar -tvf "$TAR" \
+            | awk '{print $NF}' \
+            | tee image_names.txt
+
+          echo
+          echo "===== IMAGE FILES ====="
+          cat image_names.txt
+
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: ap-inspection
+          path: |
+            tar_contents.txt
+            image_names.txt
