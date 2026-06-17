@@ -20,13 +20,12 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y unzip p7zip-full
+          sudo apt-get install -y p7zip-full
           python3 -m pip install --upgrade pip
           pip install git+https://github.com/adamwasowicz9-yansk/samloader.git
 
       - name: Download firmware
         run: |
-          # Ten fork samloader automatycznie deszyfruje plik po pobraniu!
           samloader \
             -m SM-S901E \
             -r GLB \
@@ -35,41 +34,21 @@ jobs:
             -v "S901EXXSDGZB6/S901EOXMDGZB6/S901EXXSDGZB6/S901EXXSDGZB6" \
             -o firmware.zip
 
-      - name: Find firmware zip
-        id: firmware
+      - name: Extract ONLY AP File (Save Disk Space)
         run: |
-          if [ ! -f "firmware.zip" ]; then
-            echo "Firmware ZIP not found"
-            find . -maxdepth 1 -type f
-            exit 1
-          fi
-
-          echo "Found: firmware.zip"
-          echo "file=firmware.zip" >> "$GITHUB_OUTPUT"
-
-      - name: Extract firmware
-        run: |
-          mkdir -p firmware
-          unzip -o "${{ steps.firmware.outputs.file }}" -d firmware
-
-      - name: Show extracted files
-        run: |
-          find firmware -type f | sort
-
-      - name: Find AP file
-        run: |
-          AP_FILE=$(find firmware -type f -name "AP_*.tar.md5" | head -n1)
-
-          if [ -z "$AP_FILE" ]; then
-            echo "AP file not found"
-            find firmware -type f
-            exit 1
-          fi
-
           mkdir -p artifact
-          cp "$AP_FILE" artifact/AP.tar.md5
+          
+          # Wyciągamy TYLKO plik zaczynający się od AP_ bezpośrednio do folderu artifact
+          # Flaga -e filtruje zawartość archiwum bez rozpakowywania reszty plików
+          7z e firmware.zip -oartifact "AP_*.tar.md5" -r
+          
+          # Zmiana nazwy wyciągniętego pliku na AP.tar.md5
+          mv artifact/AP_*.tar.md5 artifact/AP.tar.md5
+          
+          # Natychmiast usuwamy wielki firmware.zip, aby zwolnić miejsce przed uploadem
+          rm -f firmware.zip
 
-          echo "Selected AP:"
+          echo "Selected AP size:"
           ls -lh artifact/AP.tar.md5
 
       - name: Upload AP artifact
