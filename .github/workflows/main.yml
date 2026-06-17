@@ -6,6 +6,7 @@ on:
 jobs:
   download-fw:
     runs-on: ubuntu-latest
+    timeout-minutes: 360
 
     steps:
       - name: Install dependencies
@@ -17,27 +18,51 @@ jobs:
 
       - name: Download firmware
         run: |
-          samloader download \
-            SM-S901E \
-            GLB \
-            "S901EXXSDGZB6/S901EOXMDGZB6/S901EXXSDGZB6/S901EXXSDGZB6" \
-            firmware.zip.enc4
+          mkdir download
+
+          samloader \
+            -m SM-S901E \
+            -r GLB \
+            download \
+            -v "S901EXXSDGZB6/S901EOXMDGZB6/S901EXXSDGZB6/S901EXXSDGZB6" \
+            -O download
+
+      - name: Find encrypted firmware
+        id: firmware
+        run: |
+          FILE=$(find download -type f -name "*.enc4" | head -n1)
+
+          if [ -z "$FILE" ]; then
+            echo "Firmware .enc4 not found"
+            exit 1
+          fi
+
+          echo "file=$FILE" >> $GITHUB_OUTPUT
 
       - name: Decrypt firmware
         run: |
-          samloader decrypt firmware.zip.enc4 firmware.zip
+          samloader \
+            -m SM-S901E \
+            -r GLB \
+            decrypt \
+            -v "S901EXXSDGZB6/S901EOXMDGZB6/S901EXXSDGZB6/S901EXXSDGZB6" \
+            -V 4 \
+            -i "${{ steps.firmware.outputs.file }}" \
+            -o firmware.zip
 
       - name: Extract firmware
         run: |
           mkdir firmware
           unzip -o firmware.zip -d firmware
 
-      - name: Collect AP
+      - name: Find AP file
+        id: ap
         run: |
-          AP_FILE=$(find firmware -type f -name "AP_*.tar.md5" | head -n 1)
+          AP_FILE=$(find firmware -type f -name "AP_*.tar.md5" | head -n1)
 
           if [ -z "$AP_FILE" ]; then
             echo "AP file not found"
+            find firmware -type f
             exit 1
           fi
 
