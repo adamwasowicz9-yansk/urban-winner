@@ -1,4 +1,4 @@
-name: Download Samsung Firmware (samloader-rs)
+name: Download Specific Samsung Firmware (Only AP)
 
 on:
   workflow_dispatch:
@@ -13,39 +13,35 @@ jobs:
 
       - name: Install samloader-rs
         run: |
-          echo "Pobieranie najnowszej wersji samloader-rs od topjohnwu..."
-          # Pobieramy gotowy skompilowany plik binarny dla Linuxa z oficjalnych wydań
-          curl -s https://api.github.com/repos/topjohnwu/samloader-rs/releases/latest \
-          | grep "browser_download_url.*linux-x86_64.tar.gz" \
-          | cut -d : -f 2,3 \
-          | tr -d \" \
-          | wget -qi -
-          
-          # Rozpakowanie i przeniesienie do ścieżki systemowej
-          tar -xvf samloader-*.tar.gz
+          echo "Pobieranie samloader-rs 1.2.0..."
+          wget https://github.com/topjohnwu/samloader-rs/releases/download/1.2.0/samloader-linux-x86_64.tar.xz
+          tar -xJf samloader-linux-x86_64.tar.xz
           sudo mv samloader /usr/local/bin/
-          rm samloader-*.tar.gz
-          
-          # Sprawdzenie czy działa
+          rm samloader-linux-x86_64.tar.xz
           samloader --version
 
       - name: Fetch and Download Firmware
         run: |
           MODEL="SM-S901E"
-          CSC="GLB"
+          CSC_REGION="GLB"
+          
+          # Definiujemy konkretne wersje komponentów softu
+          PDA="S901EXXSDGZB6"
+          CSC="S901EOXMDGZB6"
+          PHONE="S901EXXSDGZB6"
           
           mkdir -p ./firmware
           
-          echo "Sprawdzanie dostępnej wersji..."
-          samloader check-update -m "$MODEL" -r "$CSC"
+          echo "Pobieranie konkretnej wersji: $PDA..."
+          # Używamy flag -p, -c, -b zamiast automatycznego sprawdzania aktualizacji
+          samloader download -m "$MODEL" -r "$CSC_REGION" -p "$PDA" -c "$CSC" -b "$PHONE" -o ./firmware/
           
-          echo "Pobieranie i deszyfrowanie oprogramowania..."
-          # samloader-rs automatycznie pobiera i deszyfruje pliki w locie do wskazanego katalogu
-          samloader download -m "$MODEL" -r "$CSC" -o ./firmware/
+          echo "Zawartość katalogu po pobraniu:"
+          ls -lh ./firmware/
 
-      - name: Upload Firmware to Artifacts
+      - name: Upload ONLY AP Firmware to Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Samsung-SM-S901E-GLB-Firmware
-          path: ./firmware/
+          name: Samsung-SM-S901E-AP-S901EXXSDGZB6
+          path: ./firmware/AP_*
           retention-days: 3
