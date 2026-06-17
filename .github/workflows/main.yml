@@ -38,15 +38,16 @@ jobs:
         run: |
           mkdir -p artifact
           
-          # Wyciągamy TYLKO plik zaczynający się od AP_ bezpośrednio do folderu artifact
-          # Flaga -e filtruje zawartość archiwum bez rozpakowywania reszty plików
+          # Wyciągamy TYLKO plik AP bezpośrednio do folderu artifact
           7z e firmware.zip -oartifact "AP_*.tar.md5" -r
-          
-          # Zmiana nazwy wyciągniętego pliku na AP.tar.md5
-          mv artifact/AP_*.tar.md5 artifact/AP.tar.md5
           
           # Natychmiast usuwamy wielki firmware.zip, aby zwolnić miejsce przed uploadem
           rm -f firmware.zip
+
+          # Zmiana nazwy wyciągniętego pliku wewnątrz folderu artifact
+          cd artifact
+          mv AP_*.tar.md5 AP.tar.md5
+          cd ..
 
           echo "Selected AP size:"
           ls -lh artifact/AP.tar.md5
