@@ -1,0 +1,51 @@
+name: Download Samsung Firmware (samloader-rs)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  download-fw:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install samloader-rs
+        run: |
+          echo "Pobieranie najnowszej wersji samloader-rs od topjohnwu..."
+          # Pobieramy gotowy skompilowany plik binarny dla Linuxa z oficjalnych wydań
+          curl -s https://api.github.com/repos/topjohnwu/samloader-rs/releases/latest \
+          | grep "browser_download_url.*linux-x86_64.tar.gz" \
+          | cut -d : -f 2,3 \
+          | tr -d \" \
+          | wget -qi -
+          
+          # Rozpakowanie i przeniesienie do ścieżki systemowej
+          tar -xvf samloader-*.tar.gz
+          sudo mv samloader /usr/local/bin/
+          rm samloader-*.tar.gz
+          
+          # Sprawdzenie czy działa
+          samloader --version
+
+      - name: Fetch and Download Firmware
+        run: |
+          MODEL="SM-S901E"
+          CSC="GLB"
+          
+          mkdir -p ./firmware
+          
+          echo "Sprawdzanie dostępnej wersji..."
+          samloader check-update -m "$MODEL" -r "$CSC"
+          
+          echo "Pobieranie i deszyfrowanie oprogramowania..."
+          # samloader-rs automatycznie pobiera i deszyfruje pliki w locie do wskazanego katalogu
+          samloader download -m "$MODEL" -r "$CSC" -o ./firmware/
+
+      - name: Upload Firmware to Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Samsung-SM-S901E-GLB-Firmware
+          path: ./firmware/
+          retention-days: 3
