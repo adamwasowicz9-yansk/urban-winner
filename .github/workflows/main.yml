@@ -31,21 +31,20 @@ jobs:
             -r GLB \
             -i 352497337708509 \
             download \
-            -v "S901EXXSDGZB6/S901EOXMDGZB6/S901EXXSDGZB6/S901EXXSDGZB6"
+            -v "S901EXXSDGZB6/S901EOXMDGZB6/S901EXXSDGZB6/S901EXXSDGZB6" \
+            -o firmware.zip
 
       - name: Find firmware zip
         id: firmware
         run: |
-          FILE=$(find . -maxdepth 1 -type f -name "*.zip" | head -n1)
-
-          if [ -z "$FILE" ]; then
+          if [ ! -f "firmware.zip" ]; then
             echo "Firmware ZIP not found"
             find . -maxdepth 1 -type f
             exit 1
           fi
 
-          echo "Found: $FILE"
-          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+          echo "Found: firmware.zip"
+          echo "file=firmware.zip" >> "$GITHUB_OUTPUT"
 
       - name: Extract firmware
         run: |
