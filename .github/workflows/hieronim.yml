@@ -1,28 +1,14 @@
-name: OTA Diagnostic
+name: Dump Updater Script
 
 on:
   workflow_dispatch:
 
 jobs:
-  inspect:
+  dump:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Download AP artifact
-        env:
-          GH_PAT: ${{ secrets.GH_PAT }}
-        run: |
-          mkdir -p base_fw
-
-          curl -L \
-            -H "Authorization: Bearer $GH_PAT" \
-            -H "Accept: application/vnd.github+json" \
-            -o ap.zip \
-            "https://api.github.com/repos/adamwasowicz9-yansk/urban-winner/actions/artifacts/7705052240/zip"
-
-          unzip -q ap.zip -d base_fw
 
       - name: Download OTA artifact
         env:
@@ -38,23 +24,6 @@ jobs:
 
           unzip -q ota.zip -d ota
 
-      - name: Install tools
-        run: |
-          sudo apt-get update
-
-          sudo apt-get install -y \
-            unzip \
-            zip \
-            lz4 \
-            file \
-            android-sdk-libsparse-utils
-
-          wget -q \
-            https://github.com/whyshhnuv/lpunpack-lpmake-mirror/raw/refs/heads/Linux-debian/binary/lpunpack
-
-          chmod +x lpunpack
-          sudo mv lpunpack /usr/local/bin/
-
       - name: Extract OTA
         run: |
           mkdir -p ota_extracted
@@ -66,109 +35,29 @@ jobs:
 
           unzip -q "$OTAFILE" -d ota_extracted
 
-      - name: Extract AP
+      - name: Dump apply_patch entries
         run: |
-          mkdir -p base_extracted
-          cd base_extracted
+          echo "===== APPLY_PATCH ====="
 
-          APFILE=$(find ../base_fw -name "*.tar.md5" | head -1)
+          grep -n "apply_patch" \
+            ota_extracted/META-INF/com/google/android/updater-script \
+            > apply_patch.txt || true
 
-          echo "Using AP:"
-          echo "$APFILE"
+          cat apply_patch.txt
 
-          head -c -33 "$APFILE" | tar xf -
+          echo
+          echo "===== FIRST 300 LINES ====="
 
-          ls -lah
+          sed -n '1,300p' \
+            ota_extracted/META-INF/com/google/android/updater-script \
+            > updater_head.txt
 
-      - name: Decompress LZ4 images
-        run: |
-          cd base_extracted
+          cat updater_head.txt
 
-          for f in *.lz4; do
-            [ -f "$f" ] || continue
-
-            echo "Decompressing $f"
-
-            lz4 -d "$f" "${f%.lz4}"
-
-            rm "$f"
-          done
-
-          ls -lah
-
-      - name: Extract partitions from super.img
-        run: |
-          mkdir -p partitions
-
-          if [ -f base_extracted/super.img ]; then
-
-            if file base_extracted/super.img | grep -qi "sparse"; then
-              echo "Sparse super.img detected"
-
-              simg2img \
-                base_extracted/super.img \
-                base_extracted/super_raw.img
-
-              lpunpack \
-                base_extracted/super_raw.img \
-                partitions/
-
-            else
-              echo "Raw super.img detected"
-
-              lpunpack \
-                base_extracted/super.img \
-                partitions/
-            fi
-
-          else
-            echo "super.img not found"
-          fi
-
-      - name: Generate report
-        run: |
-          {
-            echo "===== OTA FILES ====="
-            find ota_extracted -type f | sort
-
-            echo
-            echo "===== OTA PATCH FILES ====="
-            find ota_extracted -name "*.patch.dat" | sort
-
-            echo
-            echo "===== OTA NEW.DAT FILES ====="
-            find ota_extracted -name "*.new.dat" | sort
-
-            echo
-            echo "===== OTA TRANSFER LISTS ====="
-            find ota_extracted -name "*.transfer.list" | sort
-
-            echo
-            echo "===== OTA .P FILES ====="
-            find ota_extracted -name "*.p" | sort
-
-            echo
-            echo "===== PARTITIONS ====="
-            find partitions -type f | sort
-
-            echo
-            echo "===== PARTITION SIZES ====="
-            du -sh partitions/* 2>/dev/null || true
-
-            echo
-            echo "===== AP IMG FILES ====="
-            find base_extracted -name "*.img" | sort
-
-            echo
-            echo "===== AP ALL FILES ====="
-            find base_extracted -maxdepth 1 -type f | sort
-
-          } > report.txt
-
-          cat report.txt
-
-      - name: Upload report
+      - name: Upload dump
         uses: actions/upload-artifact@v4
         with:
-          name: ota-diagnostic-report
-          path: report.txt
+          name: updater-script-dump
+          path: |
+            apply_patch.txt
+            updater_head.txt
