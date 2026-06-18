@@ -1,150 +1,165 @@
 name: OTA Diagnostic
 
 on:
-workflow_dispatch:
+  workflow_dispatch:
 
 jobs:
-inspect:
-runs-on: ubuntu-latest
+  inspect:
+    runs-on: ubuntu-latest
 
-```
-steps:
-  - uses: actions/checkout@v4
+    steps:
+      - uses: actions/checkout@v4
 
-  - name: Download AP artifact
-    env:
-      GH_PAT: ${{ secrets.GH_PAT }}
-    run: |
-      mkdir -p base_fw
+      - name: Download AP artifact
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          mkdir -p base_fw
 
-      curl -L \
-        -H "Authorization: Bearer $GH_PAT" \
-        -H "Accept: application/vnd.github+json" \
-        -o ap.zip \
-        "https://api.github.com/repos/adamwasowicz9-yansk/urban-winner/actions/artifacts/7705052240/zip"
+          curl -L \
+            -H "Authorization: Bearer $GH_PAT" \
+            -H "Accept: application/vnd.github+json" \
+            -o ap.zip \
+            "https://api.github.com/repos/adamwasowicz9-yansk/urban-winner/actions/artifacts/7705052240/zip"
 
-      unzip -q ap.zip -d base_fw
+          unzip -q ap.zip -d base_fw
 
-  - name: Download OTA artifact
-    env:
-      GH_PAT: ${{ secrets.GH_PAT }}
-    run: |
-      mkdir -p ota
+      - name: Download OTA artifact
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          mkdir -p ota
 
-      curl -L \
-        -H "Authorization: Bearer $GH_PAT" \
-        -H "Accept: application/vnd.github+json" \
-        -o ota.zip \
-        "https://api.github.com/repos/adamwasowicz9-yansk/johnas/actions/artifacts/7709183127/zip"
+          curl -L \
+            -H "Authorization: Bearer $GH_PAT" \
+            -H "Accept: application/vnd.github+json" \
+            -o ota.zip \
+            "https://api.github.com/repos/adamwasowicz9-yansk/johnas/actions/artifacts/7709183127/zip"
 
-      unzip -q ota.zip -d ota
+          unzip -q ota.zip -d ota
 
-  - name: Install tools
-    run: |
-      sudo apt-get update
-      sudo apt-get install -y \
-        unzip \
-        zip \
-        lz4 \
-        file \
-        android-sdk-libsparse-utils
+      - name: Install tools
+        run: |
+          sudo apt-get update
 
-      wget -q \
-        https://github.com/whyshhnuv/lpunpack-lpmake-mirror/raw/refs/heads/Linux-debian/binary/lpunpack
+          sudo apt-get install -y \
+            unzip \
+            zip \
+            lz4 \
+            file \
+            android-sdk-libsparse-utils
 
-      chmod +x lpunpack
-      sudo mv lpunpack /usr/local/bin/
+          wget -q \
+            https://github.com/whyshhnuv/lpunpack-lpmake-mirror/raw/refs/heads/Linux-debian/binary/lpunpack
 
-  - name: Extract OTA
-    run: |
-      mkdir -p ota_extracted
-      unzip -q ota/ota.zip -d ota_extracted
+          chmod +x lpunpack
+          sudo mv lpunpack /usr/local/bin/
 
-  - name: Extract AP
-    run: |
-      mkdir -p base_extracted
-      cd base_extracted
+      - name: Extract OTA
+        run: |
+          mkdir -p ota_extracted
 
-      APFILE=$(find ../base_fw -name "*.tar.md5" | head -1)
+          OTAFILE=$(find ota -name "*.zip" | head -1)
 
-      echo "Using AP file:"
-      echo "$APFILE"
+          echo "Using OTA:"
+          echo "$OTAFILE"
 
-      head -c -33 "$APFILE" | tar xf -
+          unzip -q "$OTAFILE" -d ota_extracted
 
-      ls -lah
+      - name: Extract AP
+        run: |
+          mkdir -p base_extracted
+          cd base_extracted
 
-  - name: Decompress LZ4 images
-    run: |
-      cd base_extracted
+          APFILE=$(find ../base_fw -name "*.tar.md5" | head -1)
 
-      for f in *.lz4; do
-        [ -f "$f" ] || continue
-        echo "Decompressing $f"
-        lz4 -d "$f" "${f%.lz4}"
-        rm "$f"
-      done
+          echo "Using AP file:"
+          echo "$APFILE"
 
-      ls -lah
+          head -c -33 "$APFILE" | tar xf -
 
-  - name: Extract partitions from super.img
-    run: |
-      mkdir -p partitions
+          ls -lah
 
-      if [ -f base_extracted/super.img ]; then
+      - name: Decompress LZ4 images
+        run: |
+          cd base_extracted
 
-        if file base_extracted/super.img | grep -qi "sparse"; then
-          echo "Sparse super.img detected"
+          for f in *.lz4; do
+            [ -f "$f" ] || continue
 
-          simg2img \
-            base_extracted/super.img \
-            base_extracted/super_raw.img
+            echo "Decompressing $f"
 
-          lpunpack \
-            base_extracted/super_raw.img \
-            partitions/
-        else
-          echo "Raw super.img detected"
+            lz4 -d "$f" "${f%.lz4}"
 
-          lpunpack \
-            base_extracted/super.img \
-            partitions/
-        fi
+            rm "$f"
+          done
 
-      else
-        echo "super.img not found"
-      fi
+          ls -lah
 
-  - name: Generate report
-    run: |
-      {
-        echo "===== OTA FILES ====="
-        find ota_extracted -type f | sort
+      - name: Extract partitions from super.img
+        run: |
+          mkdir -p partitions
 
-        echo
-        echo "===== OTA PATCH FILES ====="
-        find ota_extracted -name "*.patch.dat" | sort
+          if [ -f base_extracted/super.img ]; then
 
-        echo
-        echo "===== OTA .P FILES ====="
-        find ota_extracted -name "*.p" | sort
+            if file base_extracted/super.img | grep -qi sparse; then
 
-        echo
-        echo "===== PARTITIONS ====="
-        ls -lh partitions || true
+              echo "Sparse super.img detected"
 
-        echo
-        echo "===== IMG FILES ====="
-        find partitions -name "*.img" | sort
+              simg2img \
+                base_extracted/super.img \
+                base_extracted/super_raw.img
 
-      } > report.txt
+              lpunpack \
+                base_extracted/super_raw.img \
+                partitions/
 
-      cat report.txt
+            else
 
-  - name: Upload report
-    uses: actions/upload-artifact@v4
-    with:
-      name: ota-diagnostic-report
-      path: |
-        report.txt
-        partitions
+              echo "Raw super.img detected"
+
+              lpunpack \
+                base_extracted/super.img \
+                partitions/
+
+            fi
+
+          else
+
+            echo "super.img not found"
+
+          fi
+
+      - name: Generate report
+        run: |
+          {
+            echo "===== OTA FILES ====="
+            find ota_extracted -type f | sort
+
+            echo
+            echo "===== OTA PATCH FILES ====="
+            find ota_extracted -name "*.patch.dat" | sort
+
+            echo
+            echo "===== OTA .P FILES ====="
+            find ota_extracted -name "*.p" | sort
+
+            echo
+            echo "===== PARTITIONS ====="
+            ls -lh partitions || true
+
+            echo
+            echo "===== IMG FILES ====="
+            find partitions -name "*.img" | sort
+
+          } > report.txt
+
+          cat report.txt
+
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: ota-diagnostic-report
+          path: |
+            report.txt
+            partitions
