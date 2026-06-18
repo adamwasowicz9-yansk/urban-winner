@@ -1,4 +1,4 @@
-name: Inspect m1v7kv
+name: Inspect CSC Contents
 
 on:
   workflow_dispatch:
@@ -8,43 +8,59 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download archive
+      - name: Download CSC package
         run: |
-          wget -O m1v7kv.zip \
+          wget -O csc.zip \
             "https://github.com/adamwasowicz9-yansk/johnas/releases/download/v69/m1v7kv.zip"
 
-          ls -lh m1v7kv.zip
-
-      - name: Extract archive
+      - name: Extract ZIP
         run: |
-          mkdir extracted
-          unzip -q m1v7kv.zip -d extracted
+          mkdir zip_extract
+          unzip -q csc.zip -d zip_extract
+
+          echo "===== ZIP CONTENT ====="
+          find zip_extract -type f | sort
+
+      - name: Extract CSC tar.md5
+        run: |
+          mkdir csc_extract
+
+          CSCFILE=$(find zip_extract -name "*.tar.md5" | head -1)
+
+          echo "Using:"
+          echo "$CSCFILE"
+
+          head -c -33 "$CSCFILE" | tar xf - -C csc_extract
 
       - name: Generate report
         run: |
           {
-            echo "===== ALL FILES ====="
-            find extracted -type f | sort
+            echo "===== CSC FILES ====="
+            find csc_extract -type f | sort
 
             echo
             echo "===== PRISM ====="
-            find extracted -type f | grep -i prism || true
+            find csc_extract -type f | grep -i prism || true
 
             echo
             echo "===== OPTICS ====="
-            find extracted -type f | grep -i optics || true
+            find csc_extract -type f | grep -i optics || true
 
             echo
             echo "===== OMC ====="
-            find extracted -type f | grep -i omc || true
+            find csc_extract -type f | grep -i omc || true
 
             echo
             echo "===== IMG FILES ====="
-            find extracted -type f \( -name "*.img" -o -name "*.ext4" \) | sort
+            find csc_extract -type f -name "*.img" | sort
+
+            echo
+            echo "===== DAT FILES ====="
+            find csc_extract -type f | grep -E '\.dat$|\.new\.dat$|\.patch\.dat$' || true
 
             echo
             echo "===== FILE SIZES ====="
-            du -sh extracted/* 2>/dev/null || true
+            du -sh csc_extract/* 2>/dev/null || true
 
           } > report.txt
 
@@ -53,5 +69,5 @@ jobs:
       - name: Upload report
         uses: actions/upload-artifact@v4
         with:
-          name: m1v7kv-report
+          name: csc-inspection-report
           path: report.txt
