@@ -1,84 +1,107 @@
-name: Inspect AP firmware
+name: Check Super.img Size and Contents
 
 on:
   workflow_dispatch:
 
 jobs:
-  inspect:
+  check-super:
     runs-on: ubuntu-latest
 
     steps:
+      - uses: actions/checkout@v4
+
+      # ── Zwolnienie miejsca na dysku (firmware potrafi ważyć sporo) ───────
+      - name: Free disk space
+        run: |
+          echo "Przed czyszczeniem:"
+          df -h /
+          sudo rm -rf \
+            /usr/share/dotnet \
+            /usr/local/lib/android \
+            /opt/ghc \
+            /opt/hostedtoolcache/CodeQL \
+            /usr/local/share/boost \
+            "$AGENT_TOOLSDIRECTORY"
+          sudo apt-get clean
+          docker rmi $(docker images -q) 2>/dev/null || true
+          echo "Po czyszczeniu:"
+          df -h /
+
+      # ── Instalacja narzędzi (lpunpack, simg2img) ────────────────────────
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y unzip lz4 wget file android-sdk-libsparse-utils
+
+          echo "Pobieranie lpunpack..."
+          wget -nv -O lpunpack https://raw.githubusercontent.com/whyshhnuv/lpunpack-lpmake-mirror/Linux-debian/binary/lpunpack
+          chmod +x lpunpack
+          sudo cp lpunpack /usr/local/bin/
+
+      # ── Pobieranie oprogramowania AP ───────────────────────────────────
       - name: Download AP artifact
-        uses: actions/download-artifact@v4
-        with:
-          github-token: ${{ secrets.GH_PAT }}
-          repository: adamwasowicz9-yansk/urban-winner
-          run-id: 27711530815
-          name: AP_S901EXXSDGZB6
-          path: ap
-
-      - name: Show downloaded files
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
         run: |
-          echo "===== DOWNLOADED ====="
-          find ap | sort
+          mkdir -p base_fw
+          curl -L \
+            -H "Authorization: Bearer $GH_PAT" \
+            -H "Accept: application/vnd.github+json" \
+            -o ap.zip \
+            "https://api.github.com/repos/durenstudnio/urban-winner/actions/artifacts/7705052240/zip"
+          unzip -q ap.zip -d base_fw
 
-      - name: Locate archive
+      # ── Ekstrakcja AP (obsługa tar.md5) ─────────────────────────────────
+      - name: Extract AP package
         run: |
-          FILE=$(find ap -type f | head -1)
-
-          echo "FILE=$FILE" >> $GITHUB_ENV
-
-          echo "===== FILE ====="
-          ls -lh "$FILE"
-
-          echo
-          echo "===== TYPE ====="
-          file "$FILE"
-
-      - name: Extract ZIP if needed
-        run: |
-          mkdir extracted
-
-          if file "$FILE" | grep -qi zip; then
-            unzip -q "$FILE" -d extracted
-          else
-            cp "$FILE" extracted/
+          mkdir -p base_extracted
+          TARFILE=$(find base_fw -name "*.tar.md5" -o -name "*.tar" | head -1)
+          
+          if [ -z "$TARFILE" ]; then
+            echo "BŁĄD: Nie znaleziono pliku tar/tar.md5!"
+            exit 1
           fi
 
-          echo "===== EXTRACTED ====="
-          find extracted | sort
+          echo "Wypakowywanie archiwum: $TARFILE"
+          if [[ "$TARFILE" == *.tar.md5 ]]; then
+            head -c -33 "$TARFILE" | tar -x -C base_extracted/
+          else
+            tar -x -f "$TARFILE" -C base_extracted/
+          fi
 
-      - name: Find TAR.MD5
+          # Jeśli super.img był dodatkowo spakowany w .lz4
+          find base_extracted -name "super.img.lz4" -exec lz4 -d {} base_extracted/super.img \; 2>/dev/null || true
+
+          echo "=== Pliki w base_extracted ==="
+          ls -lh base_extracted/
+
+      # ── Analiza i rozpakowanie super.img narzędziem lpunpack ────────────
+      - name: Unpack and check super.img
         run: |
-          TAR=$(find extracted -iname "*.tar.md5" | head -1)
+          mkdir -p partitions
+          SUPER_PATH=$(find base_extracted -name "super.img" | head -1)
+          
+          if [ -z "$SUPER_PATH" ]; then
+            echo "BŁĄD: Nie znaleziono super.img!"
+            ls -R base_extracted
+            exit 1
+          fi
 
-          echo "TAR=$TAR" >> $GITHUB_ENV
+          echo "=== Waga i typ pliku super.img ==="
+          ls -lh "$SUPER_PATH"
+          file "$SUPER_PATH"
 
-          echo "===== TAR.MD5 ====="
-          ls -lh "$TAR"
-
-      - name: List TAR contents
-        run: |
-          tar -tvf "$TAR" > tar_contents.txt
-
-          echo "===== FIRST 300 ====="
-          head -300 tar_contents.txt
-
-          echo
-          echo "===== LAST 300 ====="
-          tail -300 tar_contents.txt
-
-      - name: Categorize images
-        run: |
-          tar -tvf "$TAR" | grep -Ei '\.(img|lz4|bin|mbn|elf)$' > partitions.txt || true
-
-          echo "===== PARTITIONS ====="
-          cat partitions.txt
-
-      - name: Upload reports
-        uses: actions/upload-artifact@v4
-        with:
-          name: ap-inspection
-          path: |
-            tar_contents.txt
-            partitions.txt
+          # Sprawdzenie, czy to Android sparse image i ewentualna konwersja
+          if file "$SUPER_PATH" | grep -q "Android sparse image"; then
+            echo "Wykryto format sparse. Konwersja do raw za pomocą simg2img..."
+            simg2img "$SUPER_PATH" base_extracted/super_raw.img
+            SUPER_PATH="base_extracted/super_raw.img"
+            echo "Waga po konwersji do raw:"
+            ls -lh "$SUPER_PATH"
+          fi
+          
+          echo "=== Rozpakowywanie kontenera za pomocą lpunpack ==="
+          lpunpack "$SUPER_PATH" partitions/
+          
+          echo "=== Rozmiary podpartycji wewnątrz super.img ==="
+          ls -lh partitions/
