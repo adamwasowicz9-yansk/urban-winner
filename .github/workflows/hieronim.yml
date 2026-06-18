@@ -1,4 +1,4 @@
-name: Inspect CSC Contents
+name: Test Prism Optics
 
 on:
   workflow_dispatch:
@@ -13,61 +13,47 @@ jobs:
           wget -O csc.zip \
             "https://github.com/adamwasowicz9-yansk/johnas/releases/download/v69/m1v7kv.zip"
 
-      - name: Extract ZIP
+      - name: Extract CSC
         run: |
           mkdir zip_extract
           unzip -q csc.zip -d zip_extract
 
-          echo "===== ZIP CONTENT ====="
-          find zip_extract -type f | sort
-
-      - name: Extract CSC tar.md5
-        run: |
-          mkdir csc_extract
-
           CSCFILE=$(find zip_extract -name "*.tar.md5" | head -1)
 
-          echo "Using:"
-          echo "$CSCFILE"
-
+          mkdir csc_extract
           head -c -33 "$CSCFILE" | tar xf - -C csc_extract
 
-      - name: Generate report
+      - name: Install tools
         run: |
-          {
-            echo "===== CSC FILES ====="
-            find csc_extract -type f | sort
+          sudo apt-get update
+          sudo apt-get install -y lz4 file android-sdk-libsparse-utils
 
-            echo
-            echo "===== PRISM ====="
-            find csc_extract -type f | grep -i prism || true
+      - name: Decompress prism/optics
+        run: |
+          cd csc_extract
 
-            echo
-            echo "===== OPTICS ====="
-            find csc_extract -type f | grep -i optics || true
+          lz4 -d prism.img.lz4 prism.img
+          lz4 -d optics.img.lz4 optics.img
 
-            echo
-            echo "===== OMC ====="
-            find csc_extract -type f | grep -i omc || true
+          echo "===== FILE TYPES =====" > report.txt
+          file prism.img >> report.txt
+          file optics.img >> report.txt
 
-            echo
-            echo "===== IMG FILES ====="
-            find csc_extract -type f -name "*.img" | sort
+          echo >> report.txt
+          echo "===== SIZES =====" >> report.txt
+          ls -lh prism.img optics.img >> report.txt
 
-            echo
-            echo "===== DAT FILES ====="
-            find csc_extract -type f | grep -E '\.dat$|\.new\.dat$|\.patch\.dat$' || true
+          echo >> report.txt
+          echo "===== FIRST BYTES =====" >> report.txt
 
-            echo
-            echo "===== FILE SIZES ====="
-            du -sh csc_extract/* 2>/dev/null || true
-
-          } > report.txt
+          xxd -l 64 prism.img >> report.txt
+          echo >> report.txt
+          xxd -l 64 optics.img >> report.txt
 
           cat report.txt
 
       - name: Upload report
         uses: actions/upload-artifact@v4
         with:
-          name: csc-inspection-report
-          path: report.txt
+          name: prism-optics-test
+          path: csc_extract/report.txt
