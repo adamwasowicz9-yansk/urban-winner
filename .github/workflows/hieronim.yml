@@ -59,7 +59,7 @@ jobs:
         run: |
           mkdir -p ota_extracted
 
-          OTAFILE=$(find ota -name "*.zip" | head -1)
+          OTAFILE=$(find ota -type f | head -1)
 
           echo "Using OTA:"
           echo "$OTAFILE"
@@ -73,7 +73,7 @@ jobs:
 
           APFILE=$(find ../base_fw -name "*.tar.md5" | head -1)
 
-          echo "Using AP file:"
+          echo "Using AP:"
           echo "$APFILE"
 
           head -c -33 "$APFILE" | tar xf -
@@ -102,8 +102,7 @@ jobs:
 
           if [ -f base_extracted/super.img ]; then
 
-            if file base_extracted/super.img | grep -qi sparse; then
-
+            if file base_extracted/super.img | grep -qi "sparse"; then
               echo "Sparse super.img detected"
 
               simg2img \
@@ -115,19 +114,15 @@ jobs:
                 partitions/
 
             else
-
               echo "Raw super.img detected"
 
               lpunpack \
                 base_extracted/super.img \
                 partitions/
-
             fi
 
           else
-
             echo "super.img not found"
-
           fi
 
       - name: Generate report
@@ -141,16 +136,32 @@ jobs:
             find ota_extracted -name "*.patch.dat" | sort
 
             echo
+            echo "===== OTA NEW.DAT FILES ====="
+            find ota_extracted -name "*.new.dat" | sort
+
+            echo
+            echo "===== OTA TRANSFER LISTS ====="
+            find ota_extracted -name "*.transfer.list" | sort
+
+            echo
             echo "===== OTA .P FILES ====="
             find ota_extracted -name "*.p" | sort
 
             echo
             echo "===== PARTITIONS ====="
-            ls -lh partitions || true
+            find partitions -type f | sort
 
             echo
-            echo "===== IMG FILES ====="
-            find partitions -name "*.img" | sort
+            echo "===== PARTITION SIZES ====="
+            du -sh partitions/* 2>/dev/null || true
+
+            echo
+            echo "===== AP IMG FILES ====="
+            find base_extracted -name "*.img" | sort
+
+            echo
+            echo "===== AP ALL FILES ====="
+            find base_extracted -maxdepth 1 -type f | sort
 
           } > report.txt
 
@@ -160,6 +171,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ota-diagnostic-report
-          path: |
-            report.txt
-            partitions
+          path: report.txt
