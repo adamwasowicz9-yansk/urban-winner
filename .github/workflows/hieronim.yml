@@ -1,4 +1,4 @@
-name: Test Prism Optics
+name: Extract OTA Patch Commands
 
 on:
   workflow_dispatch:
@@ -8,52 +8,58 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download CSC package
+      - name: Download OTA
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
         run: |
-          wget -O csc.zip \
-            "https://github.com/adamwasowicz9-yansk/johnas/releases/download/v69/m1v7kv.zip"
+          mkdir -p ota
 
-      - name: Extract CSC
+          curl -L \
+            -H "Authorization: Bearer $GH_PAT" \
+            -H "Accept: application/vnd.github+json" \
+            -o ota.zip \
+            "https://api.github.com/repos/adamwasowicz9-yansk/johnas/actions/artifacts/7709183127/zip"
+
+          unzip -q ota.zip -d ota
+
+      - name: Extract OTA
         run: |
-          mkdir zip_extract
-          unzip -q csc.zip -d zip_extract
+          mkdir -p ota_extracted
 
-          CSCFILE=$(find zip_extract -name "*.tar.md5" | head -1)
+          OTAFILE=$(find ota -type f | head -1)
 
-          mkdir csc_extract
-          head -c -33 "$CSCFILE" | tar xf - -C csc_extract
+          unzip -q "$OTAFILE" -d ota_extracted
 
-      - name: Install tools
+      - name: Dump updater-script
         run: |
-          sudo apt-get update
-          sudo apt-get install -y lz4 file android-sdk-libsparse-utils
+          SCRIPT="ota_extracted/META-INF/com/google/android/updater-script"
 
-      - name: Decompress prism/optics
-        run: |
-          cd csc_extract
+          {
+            echo "===== APPLY_PATCH ====="
+            grep -n "apply_patch" "$SCRIPT" || true
 
-          lz4 -d prism.img.lz4 prism.img
-          lz4 -d optics.img.lz4 optics.img
+            echo
+            echo "===== BLOCK_IMAGE_UPDATE ====="
+            grep -n "block_image_update" "$SCRIPT" || true
 
-          echo "===== FILE TYPES =====" > report.txt
-          file prism.img >> report.txt
-          file optics.img >> report.txt
+            echo
+            echo "===== NON-HLOS ====="
+            grep -n "NON-HLOS" "$SCRIPT" || true
 
-          echo >> report.txt
-          echo "===== SIZES =====" >> report.txt
-          ls -lh prism.img optics.img >> report.txt
+            echo
+            echo "===== MODEM ====="
+            grep -n "modem" "$SCRIPT" || true
 
-          echo >> report.txt
-          echo "===== FIRST BYTES =====" >> report.txt
+            echo
+            echo "===== BOOT ====="
+            grep -n "boot" "$SCRIPT" || true
 
-          xxd -l 64 prism.img >> report.txt
-          echo >> report.txt
-          xxd -l 64 optics.img >> report.txt
+          } > report.txt
 
           cat report.txt
 
       - name: Upload report
         uses: actions/upload-artifact@v4
         with:
-          name: prism-optics-test
-          path: csc_extract/report.txt
+          name: updater-script-report
+          path: report.txt
