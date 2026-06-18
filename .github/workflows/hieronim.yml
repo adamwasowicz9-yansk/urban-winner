@@ -1,63 +1,57 @@
-name: Dump Updater Script
+name: Inspect m1v7kv
 
 on:
   workflow_dispatch:
 
 jobs:
-  dump:
+  inspect:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Download OTA artifact
-        env:
-          GH_PAT: ${{ secrets.GH_PAT }}
+      - name: Download archive
         run: |
-          mkdir -p ota
+          wget -O m1v7kv.zip \
+            "https://github.com/adamwasowicz9-yansk/johnas/releases/download/v69/m1v7kv.zip"
 
-          curl -L \
-            -H "Authorization: Bearer $GH_PAT" \
-            -H "Accept: application/vnd.github+json" \
-            -o ota.zip \
-            "https://api.github.com/repos/adamwasowicz9-yansk/johnas/actions/artifacts/7709183127/zip"
+          ls -lh m1v7kv.zip
 
-          unzip -q ota.zip -d ota
-
-      - name: Extract OTA
+      - name: Extract archive
         run: |
-          mkdir -p ota_extracted
+          mkdir extracted
+          unzip -q m1v7kv.zip -d extracted
 
-          OTAFILE=$(find ota -type f | head -1)
-
-          echo "Using OTA:"
-          echo "$OTAFILE"
-
-          unzip -q "$OTAFILE" -d ota_extracted
-
-      - name: Dump apply_patch entries
+      - name: Generate report
         run: |
-          echo "===== APPLY_PATCH ====="
+          {
+            echo "===== ALL FILES ====="
+            find extracted -type f | sort
 
-          grep -n "apply_patch" \
-            ota_extracted/META-INF/com/google/android/updater-script \
-            > apply_patch.txt || true
+            echo
+            echo "===== PRISM ====="
+            find extracted -type f | grep -i prism || true
 
-          cat apply_patch.txt
+            echo
+            echo "===== OPTICS ====="
+            find extracted -type f | grep -i optics || true
 
-          echo
-          echo "===== FIRST 300 LINES ====="
+            echo
+            echo "===== OMC ====="
+            find extracted -type f | grep -i omc || true
 
-          sed -n '1,300p' \
-            ota_extracted/META-INF/com/google/android/updater-script \
-            > updater_head.txt
+            echo
+            echo "===== IMG FILES ====="
+            find extracted -type f \( -name "*.img" -o -name "*.ext4" \) | sort
 
-          cat updater_head.txt
+            echo
+            echo "===== FILE SIZES ====="
+            du -sh extracted/* 2>/dev/null || true
 
-      - name: Upload dump
+          } > report.txt
+
+          cat report.txt
+
+      - name: Upload report
         uses: actions/upload-artifact@v4
         with:
-          name: updater-script-dump
-          path: |
-            apply_patch.txt
-            updater_head.txt
+          name: m1v7kv-report
+          path: report.txt
