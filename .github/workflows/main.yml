@@ -28,7 +28,7 @@ jobs:
         run: |
           samloader \
             -m SM-S901E \
-            -r GLB \
+            -r XXV \
             -i 352497337708509 \
             download \
             -v "S901EXXSDGZB6/S901EOXMDGZB6/S901EXXSDGZB6/S901EXXSDGZB6" \
@@ -38,7 +38,7 @@ jobs:
         run: |
           samloader \
             -m SM-S901E \
-            -r GLB \
+            -r XXV \
             decrypt \
             -v "S901EXXSDGZB6/S901EOXMDGZB6/S901EXXSDGZB6/S901EXXSDGZB6" \
             -i firmware.zip.enc4 \
