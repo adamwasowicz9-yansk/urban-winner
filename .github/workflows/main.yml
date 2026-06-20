@@ -45,28 +45,27 @@ jobs:
             -o firmware.zip
           rm -f firmware.zip.enc4
 
-      - name: Extract ONLY AP File (Save Disk Space)
+      - name: Extract all except HOME_CSC
         run: |
           mkdir -p artifact
-          
-          # Wyciągamy TYLKO plik AP bezpośrednio do folderu artifact
-          7z e firmware.zip -oartifact "AP_*.tar.md5" -r
-          
-          # Natychmiast usuwamy wielki firmware.zip, aby zwolnić miejsce przed uploadem
+          7z e firmware.zip -oartifact "*.tar.md5" -x!"HOME_CSC_*.tar.md5" -r
           rm -f firmware.zip
+          echo "Extracted files:"
+          ls -lh artifact/
 
-          # Zmiana nazwy wyciągniętego pliku wewnątrz folderu artifact
+      - name: Pack extracted files into FW.zip
+        run: |
           cd artifact
-          mv AP_*.tar.md5 AP.tar.md5
+          7z a -tzip ../FW.zip *
           cd ..
+          rm -rf artifact
+          echo "Created FW.zip with:"
+          ls -lh FW.zip
 
-          echo "Selected AP size:"
-          ls -lh artifact/AP.tar.md5
-
-      - name: Upload AP artifact
+      - name: Upload FW artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AP_S901EXXSDGZB6
-          path: artifact/AP.tar.md5
+          name: FW
+          path: FW.zip
           compression-level: 0
           retention-days: 7
